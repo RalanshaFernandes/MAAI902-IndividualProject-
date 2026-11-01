@@ -1,0 +1,11 @@
+# Raw and derived data are rebuilt by the scripts in src/
+data/
+# The report stays local and is not published
+report/
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Temporary files from atomic writes and tests
+*.tmp

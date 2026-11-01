@@ -1,0 +1,25 @@
+true,pred_negative,pred_neutral,pred_positive,dataset,model
+true_negative,120,3,2,Financial PhraseBank (test),FinBERT
+true_neutral,32,471,62,Financial PhraseBank (test),FinBERT
+true_positive,7,25,248,Financial PhraseBank (test),FinBERT
+true_negative,120,3,2,Financial PhraseBank (test),FinBERT + domain rule
+true_neutral,31,471,63,Financial PhraseBank (test),FinBERT + domain rule
+true_positive,6,25,249,Financial PhraseBank (test),FinBERT + domain rule
+true_negative,38,68,19,Financial PhraseBank (test),Loughran-McDonald
+true_neutral,65,420,80,Financial PhraseBank (test),Loughran-McDonald
+true_positive,40,149,91,Financial PhraseBank (test),Loughran-McDonald
+true_negative,34,43,48,Financial PhraseBank (test),VADER
+true_neutral,43,287,235,Financial PhraseBank (test),VADER
+true_positive,16,77,187,Financial PhraseBank (test),VADER
+true_negative,264,71,12,Twitter Financial News (val),FinBERT
+true_neutral,213,1184,169,Twitter Financial News (val),FinBERT
+true_positive,58,133,284,Twitter Financial News (val),FinBERT
+true_negative,264,71,12,Twitter Financial News (val),FinBERT + domain rule
+true_neutral,213,1184,169,Twitter Financial News (val),FinBERT + domain rule
+true_positive,58,133,284,Twitter Financial News (val),FinBERT + domain rule
+true_negative,165,172,10,Twitter Financial News (val),Loughran-McDonald
+true_neutral,282,1158,126,Twitter Financial News (val),Loughran-McDonald
+true_positive,49,345,81,Twitter Financial News (val),Loughran-McDonald
+true_negative,168,95,84,Twitter Financial News (val),VADER
+true_neutral,286,791,489,Twitter Financial News (val),VADER
+true_positive,41,213,221,Twitter Financial News (val),VADER

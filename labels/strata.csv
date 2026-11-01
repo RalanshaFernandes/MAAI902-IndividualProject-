@@ -1,0 +1,7 @@
+label,population_share,source
+neutral,0.7444090469624206,DFM disclosure
+positive,0.22683974450414468,DFM disclosure
+negative,0.028751208533434772,DFM disclosure
+neutral,0.5757266700662927,News headline
+positive,0.36613972463029065,News headline
+negative,0.05813360530341662,News headline

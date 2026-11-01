@@ -1,0 +1,36 @@
+# Data collection
+pandas
+numpy
+requests
+yfinance
+feedparser
+tqdm
+
+# PDF text extraction and OCR
+pymupdf
+pytesseract      # also needs the Tesseract binary: winget install UB-Mannheim.TesseractOCR
+pillow
+
+# NLP models
+torch            # CPU build: pip install torch --index-url https://download.pytorch.org/whl/cpu
+transformers
+huggingface-hub
+accelerate
+sentence-transformers
+
+# Retrieval-augmented explanations
+langchain-core
+langchain-huggingface
+langchain-chroma
+
+# Evaluation and statistics
+datasets
+scikit-learn
+scipy
+statsmodels
+vaderSentiment
+pysentiment2
+
+# Web app
+streamlit
+plotly
