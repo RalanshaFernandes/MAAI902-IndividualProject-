@@ -13,6 +13,19 @@ cited evidence and generated with **Falcon** (Technology Innovation Institute, A
 
 *"Efsah" (إفصاح) is Arabic for "disclosure"; DFM's disclosure data service uses the same word.*
 
+## Contents
+
+1. [What it does](#what-it-does)
+2. [Repository layout](#repository-layout)
+3. [Setup](#setup)
+4. [Get the data and run the pipeline](#get-the-data-and-run-the-pipeline)
+5. [Run the app](#run-the-app)
+6. [Refresh the data](#refresh-the-data)
+7. [Data sources](#data-sources)
+8. [Key results](#key-results)
+9. [Responsible AI](#responsible-ai)
+10. [AI assistance](#ai-assistance)
+
 ---
 
 ## What it does
@@ -33,7 +46,6 @@ cited evidence and generated with **Falcon** (Technology Innovation Institute, A
 ## Repository layout
 
 ```
-NLP/
 ├── src/                    # all code (run pipeline commands from this folder)
 │   ├── config.py           # paths, stock list and settings
 │   ├── collection/         # disclosures, PDFs, prices, news, transcripts
@@ -44,8 +56,7 @@ NLP/
 │   └── app/                # Streamlit web app (app.py) and gold-set review tool (review_gold_labels.py)
 ├── labels/                 # gold-set sample, AI-suggested labels, author-verified labels
 ├── results/                # evaluation outputs (CSV)
-├── report/                 # NOT in git; technical report (APA 7, .docx)
-├── data/                   # NOT in git; rebuilt by the scripts
+├── data/                   # NOT in git; created by the pipeline
 │   ├── raw/                # downloaded data, as collected
 │   └── processed/          # everything the pipeline generates
 ├── requirements.txt
@@ -56,84 +67,210 @@ NLP/
 
 ## Setup
 
-Tested on Windows 11 with Python 3.12.
+Tested on Windows 11 with Python 3.12. The commands below are for PowerShell. You need about 3 GB of free
+disk space for the data, plus room for the models.
 
-```bash
+**1. Get the code**
+
+```powershell
+git clone https://github.com/RalanshaFernandes/MAAI902-IndividualProject-.git
+cd MAAI902-IndividualProject-
+```
+
+**2. Install the packages** (PyTorch first, so you get the smaller CPU build)
+
+```powershell
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
-pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU build of PyTorch
 ```
 
-External pieces:
+**3. Install Tesseract OCR with Arabic support**
 
-- **Tesseract OCR**: `winget install UB-Mannheim.TesseractOCR`. For Arabic OCR, download
-  [`ara.traineddata`](https://github.com/tesseract-ocr/tessdata_fast) into `~/models/tessdata/`
-  together with copies of `eng.traineddata` and `osd.traineddata`.
-- **Models** are fetched from Hugging Face on first use. `python -m collection.download_model <repo>` (from `src/`) is a resumable
-  downloader into `~/models/` for slow or unstable connections (used for Falcon-H1, CAMeLBERT and opus-mt).
-- **Falcon model size**: the default is `tiiuae/Falcon-H1-1.5B-Instruct` (laptop CPU, about 2 min per
-  explanation). On a GPU set `FALCON_MODEL=tiiuae/Falcon-H1-7B-Instruct` for better English and Arabic.
+```powershell
+winget install UB-Mannheim.TesseractOCR
+
+$tess = "$HOME\models\tessdata"
+New-Item -ItemType Directory -Force $tess
+Copy-Item "C:\Program Files\Tesseract-OCR\tessdata\eng.traineddata", "C:\Program Files\Tesseract-OCR\tessdata\osd.traineddata" $tess
+Invoke-WebRequest https://github.com/tesseract-ocr/tessdata_fast/raw/main/ara.traineddata -OutFile "$tess\ara.traineddata"
+```
+
+The code expects Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`. If yours is elsewhere, change
+`tesseract_cmd` in `src/text_processing/ocr_scanned_en.py` and `extract_text_ar.py`.
+
+**4. Download Falcon** (optional)
+
+Other models download automatically on first use. Falcon is only used if it is already on disk; without it,
+explanations use the built-in template. From `src/`:
+
+```powershell
+cd src
+python -m collection.download_model tiiuae/Falcon-H1-1.5B-Instruct
+cd ..
+```
+
+This downloader can resume, which helps on slow connections. It also works for CAMeLBERT and OPUS-MT, using the
+same command with `CAMeL-Lab/bert-base-arabic-camelbert-msa-sentiment`,
+`CAMeL-Lab/bert-base-arabic-camelbert-mix-sentiment` or `Helsinki-NLP/opus-mt-ar-en`.
+
+The 1.5B model runs on a laptop CPU at about 2 minutes per explanation. With a GPU, set
+`$env:FALCON_MODEL = "tiiuae/Falcon-H1-7B-Instruct"` for better English and Arabic.
 
 ---
 
-## Running the pipeline
+## Get the data and run the pipeline
 
-Run every step from `src/` as a module, for example `python -m collection.prices`. Each one writes its
-outputs to `data/` or `results/` and can be re-run.
+`data/` is not in this repository, so **run these steps once before starting the app**. Run them from `src/`, in
+this order, because each stage uses the output of the one before.
 
-| # | Module | Output |
+A full run takes several hours on a laptop CPU, mostly PDF download, OCR and model inference. Requests are
+rate-limited (1–2 s apart). Downloads are cached, so if a step stops or DFM throttles you, wait and run it again.
+
+```powershell
+cd src
+```
+
+**Stage 1: Collect the data**
+
+```powershell
+python -m collection.collect_disclosures
+python -m collection.prices
+python -m collection.build_market_index
+python -m collection.download_pdfs
+python -m collection.download_pdfs --lang ar
+python -m collection.collect_news
+python -m collection.collect_mubasher
+python -m collection.collect_transcripts
+```
+
+**Stage 2: Extract text from the PDFs**
+
+```powershell
+python -m text_processing.extract_text_en
+python -m text_processing.ocr_scanned_en
+python -m text_processing.extract_text_ar
+```
+
+**Stage 3: Score sentiment**
+
+```powershell
+python -m sentiment.score_documents
+python -m sentiment.score_news
+python -m sentiment.score_transcripts
+python -m sentiment.compare_arabic_models
+```
+
+**Stage 4: Evaluate**
+
+```powershell
+python -m evaluation.evaluate_benchmarks
+python -m evaluation.event_study
+python -m evaluation.evaluate_gold
+```
+
+**Stage 5: Build the signal and explanations**
+
+```powershell
+python -m signals.signal_model
+python -m signals.build_index
+python -m signals.explain EMAAR EMIRATESNBD DIB DU DEWA SALIK
+```
+
+```powershell
+cd ..
+```
+
+### What each step produces
+
+| Stage | Module | Output |
 |---|---|---|
-| 1 | `collection.collect_disclosures` | disclosure metadata, EN/AR headlines, attachment lists |
-| 2 | `collection.prices` | daily prices for the 6 stocks |
-| 3 | `collection.build_market_index` | equal-weighted DFM market index (all DFM equities with Yahoo prices) |
-| 4 | `collection.download_pdfs` (and `--lang ar`) | English and Arabic disclosure PDFs |
-| 5 | `text_processing.extract_text_en`, `text_processing.ocr_scanned_en` | English text, OCR for scanned PDFs |
-| 6 | `sentiment.score_documents` | FinBERT sentence scores and document scores |
-| 7 | `collection.collect_news`, `collection.collect_mubasher`, `collection.collect_transcripts` | news headlines, Mubasher items, call transcripts |
-| 8 | `sentiment.score_news`, `sentiment.score_transcripts` | FinBERT on headlines and transcripts |
-| 9 | `evaluation.evaluate_benchmarks` | FinBERT vs baselines on public benchmarks |
-| 10 | `evaluation.event_study` | price reaction around events |
-| 11 | `signals.signal_model` | Buy / Hold / Sell signals and back-test |
-| 12 | `signals.build_index` | evidence vector index for explanations |
-| 13 | `signals.explain <SYMBOL>` | bilingual explanation for a stock |
-| 14 | `text_processing.extract_text_ar`, `sentiment.compare_arabic_models` | Arabic text and cross-lingual comparison |
-| 15 | `evaluation.make_gold_sample`, `evaluation.write_ai_labels`, `evaluation.evaluate_gold` | gold-set sample, AI-suggested labels, evaluation on the reviewed labels |
+| 1 | `collection.collect_disclosures` | `data/raw/disclosures.csv`, `attachments.csv`, `attachments_ar.csv` |
+| 1 | `collection.prices` | `data/raw/prices/<SYMBOL>.csv`, daily prices for the 6 stocks |
+| 1 | `collection.build_market_index` | `data/processed/market_index.csv`, equal-weighted DFM benchmark |
+| 1 | `collection.download_pdfs` (and `--lang ar`) | `data/raw/pdfs/`, English and Arabic disclosure PDFs |
+| 1 | `collection.collect_news` | `data/raw/news/`, `data/processed/news.csv` |
+| 1 | `collection.collect_mubasher` | `data/raw/mubasher/`, `data/processed/mubasher.csv` |
+| 1 | `collection.collect_transcripts` | `data/raw/transcripts/`, `data/processed/transcript_turns.csv` |
+| 2 | `text_processing.extract_text_en` | `data/processed/text_en/`, `documents.csv` |
+| 2 | `text_processing.ocr_scanned_en` | OCR text for scanned English PDFs |
+| 2 | `text_processing.extract_text_ar` | `data/processed/text_ar/`, `documents_ar.csv` |
+| 3 | `sentiment.score_documents` | `sentences.csv`, `doc_sentiment.csv` |
+| 3 | `sentiment.score_news` | `news_sentiment.csv`, `mubasher_sentiment.csv` |
+| 3 | `sentiment.score_transcripts` | `transcript_sentences.csv`, `transcript_tone.csv` |
+| 3 | `sentiment.compare_arabic_models` | `arabic_docs.csv`, `results/arabic_crosslingual.csv` |
+| 4 | `evaluation.evaluate_benchmarks` | `results/model_eval.csv`, `confusion_matrices.csv`, `model_agreement.csv` |
+| 4 | `evaluation.event_study` | `events_*.csv`, `results/event_study_summary.csv` |
+| 4 | `evaluation.evaluate_gold` | `results/gold_eval.csv`, `gold_eval_rule_items.csv` |
+| 5 | `signals.signal_model` | `signals.csv`, `results/signal_classes.csv`, `backtest_summary.csv`, `backtest_robustness.csv` |
+| 5 | `signals.build_index` | `evidence.csv`, Chroma index in `~/.cache/dfm_nlp/index` |
+| 5 | `signals.explain <SYMBOL> ...` | `data/processed/explanations/`, one explanation per stock |
 
-Collecting and processing everything from scratch takes several hours on a laptop CPU, mostly PDF
-download, OCR and model inference. Network calls are rate-limited (1–2 s between requests).
+### The gold set
 
-**Refreshing the data** is incremental: re-run steps 1–8 and 10–13 in order. Downloads, text extraction, OCR
-and FinBERT document scoring skip anything already processed (`--all` forces a full re-run of
-`text_processing.extract_text_en` and `sentiment.score_documents`). Delete the current month's cache files in
-`data/raw/news/` and `data/raw/mubasher/` first, because they hold the state of the last run. The gold sample is
-fixed: `evaluation.make_gold_sample` refuses to overwrite it without `--force`.
+The hand-reviewed gold set is already in `labels/`, so you do not need to rebuild it. **Do not run
+`evaluation.make_gold_sample --force`**: it replaces the sample the reviewed labels belong to. The tools used to
+create it are `evaluation.make_gold_sample`, `evaluation.write_ai_labels` and `src/app/review_gold_labels.py`.
 
-## Running the app
+### Optional settings
 
-```bash
-streamlit run src/app/app.py                       # http://localhost:8501
-streamlit run src/app/review_gold_labels.py --server.port 8502  # gold-set review tool
+| Environment variable | Purpose |
+|---|---|
+| `FALCON_MODEL` | Falcon model to use (default `tiiuae/Falcon-H1-1.5B-Instruct`) |
+| `DFM_PDF_DIR` | Keep the PDFs (about 1.5 GB) outside the project, for example outside a cloud-synced folder |
+| `DFM_INDEX_DIR` | Where to store the evidence index (default `~/.cache/dfm_nlp/index`) |
+| `GOLD_LABELS_FILE` | Label file used by the review tool (default `labels/gold_labels.csv`) |
+
+---
+
+## Run the app
+
+Run these from the project root, after completing the pipeline.
+
+```powershell
+streamlit run src/app/app.py
+```
+
+The app opens at http://localhost:8501. To open the gold-set review tool:
+
+```powershell
+streamlit run src/app/review_gold_labels.py --server.port 8502
 ```
 
 ---
 
-## Data
+## Refresh the data
+
+Refreshing is incremental. Downloads, text extraction, OCR and FinBERT document scoring skip anything already
+processed.
+
+1. Delete the current month's files in `data/raw/news/<SYMBOL>/`, and the Mubasher pages in `data/raw/mubasher/`,
+   because they hold the state of the last run.
+2. Re-run the stages above, leaving out `collection.download_pdfs --lang ar`, `text_processing.extract_text_ar`,
+   `sentiment.compare_arabic_models`, `evaluation.evaluate_benchmarks` and `evaluation.evaluate_gold`.
+   The benchmarks and gold set do not depend on new data.
+
+To force a full re-run, add `--all` to `text_processing.extract_text_en` or `sentiment.score_documents`.
+
+---
+
+## Data sources
 
 | Source | Volume | Use |
 |---|---|---|
 | DFM disclosures (DFM's `efsah` data API) | 3,075 disclosures; 1,669 English + 1,536 Arabic PDFs since 2019 | main text source |
-| Yahoo Finance | daily prices, 6 stocks (+ about 65 for the market index) | momentum, event study |
+| Yahoo Finance | daily prices, 6 stocks (+ up to 64 a day for the market index) | momentum, event study |
 | Google News search feeds | 7,126 headlines | independent media view |
 | Mubasher | 1,636 items | second news source |
 | Emirates NBD investor relations | 34 results-call transcripts | management vs analyst tone |
 | Financial PhraseBank, Twitter Financial News | 970 + 2,388 labelled texts | model benchmarks |
 
 Stocks: Emaar Properties, Emirates NBD, Dubai Islamic Bank, du, DEWA, Salik. Data last refreshed on
-28 October 2026, and the report uses that data. The Arabic PDFs, cross-lingual evaluation and gold set were built
-from the data available on 9 October 2026 and were not extended.
+28 October 2026. The Arabic PDFs, cross-lingual evaluation and gold set were built from the data available on
+9 October 2026 and were not extended, so your numbers will differ if you collect the data again.
 
-Raw data is not redistributed in this repository. Only metadata, headlines and links are stored for news
-(no full articles). The DFM data service used is undocumented: requests are rate-limited and cached, and
-any production use would require a licensed data feed.
+Raw data is not redistributed in this repository. For news, only metadata, headlines, leads and links are stored
+(no full articles). The DFM data service used is undocumented: requests are rate-limited and cached, and any
+production use would require a licensed data feed.
 
 ---
 
@@ -156,6 +293,8 @@ Details are in `results/` and the report (data to 28 October 2026).
   momentum alone before costs, and that ranking is unstable. After costs the combined signal is slightly
   negative (-1.0% a year). Hence the decision-support framing.
 
+---
+
 ## Responsible AI
 
 - **No look-ahead.** Only text published before each trading session is used.
@@ -164,8 +303,11 @@ Details are in `results/` and the report (data to 28 October 2026).
 - **Grounded explanations.** Falcon may only use retrieved, cited evidence. Citations and numbers are checked
   automatically, Arabic output passes a quality gate, and a deterministic template is the fallback.
 - **Missing data is treated as missing,** not as neutral.
-- **Limitations.** Sentiment is primarily English. No Arabic financial sentiment model exists, so Arabic
-  approaches are compared cross-lingually. The gold set uses AI-suggested labels verified by the author.
+- **Limitations.** Sentiment is primarily English. No established Arabic-specific financial sentiment model was
+  found, so Arabic approaches are compared cross-lingually. The gold set uses AI-suggested labels verified by the
+  author.
+
+---
 
 ## AI assistance
 
